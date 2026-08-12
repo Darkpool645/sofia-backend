@@ -1,0 +1,197 @@
+// ─────────────────────────────────────────────────────────────
+// SOFIA · Prisma schema
+// Postgres serverless (Prisma Postgres / Neon / Supabase).
+// DATABASE_URL = conexión POOLED (consultas de la app)
+// DIRECT_URL = conexión DIRECTA (solo migraciones / DDL)
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Roles y estados ──────────────────────────────────────────
+enum Role {
+  ADMIN
+  PROFESOR
+  PADRE
+}
+
+enum AttendanceStatus {
+  PRESENTE
+  AUSENTE
+  RETARDO
+}
+
+// ── Usuarios ─────────────────────────────────────────────────
+model User {
+  id                String @id @default(cuid())
+  email             String @unique
+  passwordHash      String
+  name              String
+  role              Role
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Como PROFESOR: grupos donde es titular y clases/avisos que crea
+  groupsAsTeacher   Group[]     @relation("GroupTeacher")
+  classes           ClassSlot[]
+  avisos            Aviso[]
+  tasksCreated      Task[]
+  attendanceMarks   Attendance[] @relation("MarkedBy")
+
+  // Como PADRE: alumnos que tutela
+  children          Student[] @relation("Guardian")
+
+  // Consentimiento de Aviso de Privacidad / T&C (requisito legal LFPDPPP)
+  consents          PrivacyConsent[]
+
+  @@index([role])
+}
+
+// ── Ciclo escolar ────────────────────────────────────────────
+model SchoolYear {
+  id                String @id @default(cuid())
+  name              String @unique // ej. "2026-2027"
+  startDate         DateTime
+  endDate           DateTime
+  active            Boolean @default(false)
+  groups            Group[]
+}
+
+// ── Grupos ───────────────────────────────────────────────────
+model Group {
+  id                String @id @default(cuid())
+  name              String // ej. "3°B"
+  schoolYear        SchoolYear @relation(fields: [schoolYearId], references: [id])
+  schoolYearId      String
+
+  teacher           User? @relation("GroupTeacher", fields: [teacherId], references: [id])
+  teacherId         String?
+
+  students          Student[]
+  classes           ClassSlot[]
+  tasks             Task[]
+  avisos            Aviso[]
+  evaluationItems   EvaluationItem[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([name, schoolYearId])
+}
+
+// ── Alumnos ──────────────────────────────────────────────────
+model Student {
+  id                String @id @default(cuid())
+  name              String
+  group             Group @relation(fields: [groupId], references: [id])
+  groupId           String
+
+  guardian          User? @relation("Guardian", fields: [guardianId], references: [id])
+  guardianId        String?
+
+  attendances       Attendance[]
+  submissions       Submission[]
+  
+  @@index([groupId])
+}
+
+// ── Horario / clase (habilita "ingreso directo a la clase actual") ─
+model ClassSlot {
+  id                String @id @default(cuid())
+  subject           String // materia, ej. "Matemáticas"
+  group             Group @relation(fields: [groupId], references: [id])
+  groupId           String
+  teacher           User @relation(fields: [teacherId], references: [id])
+  teacherId         String
+
+  dayOfWeek         Int // 1 = lunes ... 7 = domingo
+  startTime         String // "09:00"
+  endTime           String // "09:50"
+
+  attendances       Attendance[]
+
+  @@index([groupId, dayOfWeek])
+}
+
+// ── Asistencia ───────────────────────────────────────────────
+model Attendance {
+  id                  String @id @default(cuid())
+  student             Student @relation(fields: [studentId], references: [id])
+  studentId           String
+  class               ClassSlot? @relation(fields: [classId], references: [id])
+  classId             String?
+  date                DateTime // día del registro
+  status              AttendanceStatus
+  markedBy            User @relation("MarkedBy", fields: [markedById], references: [id])
+  markedById          String
+  createdAt           DateTime @default(now())
+
+  @@unique([studentId, date, classId])
+  @@index([date])
+}
+
+// ── Tareas y entregas ────────────────────────────────────────
+model Task {
+  id                  String @id @default(cuid())
+  title               String
+  description         String?
+  dueDate             DateTime
+  group               Group @relation(fields: [groupId], references: [id])
+  groupId             String
+  createdBy           User @relation(fields: [createdById], references: [id])
+  createdById         String
+  createdAt           DateTime @default(now())
+
+  submissions         Submission[]
+
+  @@index([groupId, dueDate])
+}
+
+model Submission {
+  id                  String @id @default(cuid())
+  task                Task @relation(fields: [taskId], references: [id])
+  taskId              String
+  student             Student @relation(fields: [studentId], references: [id])
+  studentId           String
+  delivered           Boolean @default(false) // MVP: Entregó / No entregó
+  updatedAt           DateTime @updatedAt
+
+  @@unique([taskId, studentId])
+}
+
+// ── Muro de avisos (unidireccional profesor → padres) ────────
+model Aviso {
+  id                  String @id @default(cuid())
+  body                String
+  group               Group @relation(fields: [groupId], references: [id])
+  groupId             String
+  author              User @relation(fields: [authorId], references: [id])
+  authorId            String
+  createdAt           DateTime @default(now())
+
+  @@index([groupId, createdAt])
+}
+
+// ── Ponderación de evaluación (debe sumar 100% por grupo) ────
+model EvaluationItem {
+  id                  String @id @default(cuid())
+  group               Group @relation(fields: [groupId], references: [id])
+  groupId             String
+  label               String // ej. "Tareas", "Examen"
+  percentage          Int // 0-100
+
+  @@index([groupId])
+}
+
+// ── Consentimiento legal (Aviso de Privacidad / T&C) ─────────
+model PrivacyConsent {
+  id                 String @id @default(cuid())
+  user               User @relation(fields: [userId], references: [id])
+  userId             String
+  version            String // Versión del aviso aceptada
+  acceptedAt         DateTime @default(now())
+
+  @@index([userId])
+}
