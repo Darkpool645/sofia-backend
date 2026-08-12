@@ -34,6 +34,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     constructor(private audit: AuditService) {}
 
     catch(exception: unknown, host: ArgumentsHost) {
+        console.error('❌ ERROR REAL:', exception)
         const ctx = host.switchToHttp();
         const res = ctx.getResponse();
         const req = ctx.getRequest();

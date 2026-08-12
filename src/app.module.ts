@@ -8,9 +8,10 @@ import { UsersModule } from './users/users.module';
 import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard, RolesGuard } from './auth/guards';
 import { AuditInterceptor, AllExceptionsFilter } from './audit/audit.telemetry';
+import { ConfigModule } from "@nestjs/config";
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, AuditModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }),PrismaModule, AuthModule, UsersModule, AuditModule],
   controllers: [AppController],
   providers: [
     AppService,
