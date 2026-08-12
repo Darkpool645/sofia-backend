@@ -17,15 +17,40 @@ datasource db {
 
 // ── Roles y estados ──────────────────────────────────────────
 enum Role {
+  SUPERADMIN
   ADMIN
   PROFESOR
   PADRE
+}
+
+enum AuditLevel {
+  INFO
+  WARN
+  ERROR
 }
 
 enum AttendanceStatus {
   PRESENTE
   AUSENTE
   RETARDO
+}
+
+model AuditLog {
+  id                String @id @default(cuid())
+  level             AuditLevel @default(INFO)
+  action            String
+  method            String?
+  path              String?
+  statusCode        Int?
+  message           String?
+  metadata          Json?
+  ip                String?
+  actor             User? @relation("Actor", fields: [actorId], references: [id])
+  actorId           String?
+  createdAt         DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([actorId])
 }
 
 // ── Usuarios ─────────────────────────────────────────────────
@@ -50,6 +75,8 @@ model User {
 
   // Consentimiento de Aviso de Privacidad / T&C (requisito legal LFPDPPP)
   consents          PrivacyConsent[]
+
+  auditLogs AuditLog[] @relation("Actor")
 
   @@index([role])
 }

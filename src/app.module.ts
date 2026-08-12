@@ -1,11 +1,24 @@
-import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PrismaModule } from './prisma/prisma.module';
+import { Module } from "@nestjs/common";
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from "@nestjs/core";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
+import { PrismaModule } from "./prisma/prisma.module";
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { AuditModule } from './audit/audit.module';
+import { JwtAuthGuard, RolesGuard } from './auth/guards';
+import { AuditInterceptor, AllExceptionsFilter } from './audit/audit.telemetry';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, UsersModule, AuditModule],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter }, 
+  ],
 })
-export class AppModule {}
+
+export class AppModule{}
