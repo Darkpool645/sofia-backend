@@ -13,7 +13,7 @@ export class GroupsController {
         return this.service.create(user.id, dto);
     }
 
-    @Roles('Admin', 'SUPERADMIN')
+    @Roles('ADMIN', 'SUPERADMIN')
     @Get()
     findAll() {
         return this.service.findAll();
