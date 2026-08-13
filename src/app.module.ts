@@ -9,9 +9,19 @@ import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard, RolesGuard } from './auth/guards';
 import { AuditInterceptor, AllExceptionsFilter } from './audit/audit.telemetry';
 import { ConfigModule } from "@nestjs/config";
+import { SchoolYearsModule } from "./school-years/school-years.module";
+import { GroupsModule } from "./groups/groups.module";
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }),PrismaModule, AuthModule, UsersModule, AuditModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule, 
+    AuthModule, 
+    UsersModule, 
+    AuditModule,
+    SchoolYearsModule,
+    GroupsModule
+  ],
   controllers: [AppController],
   providers: [
     AppService,
