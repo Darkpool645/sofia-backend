@@ -11,6 +11,7 @@ import { AuditInterceptor, AllExceptionsFilter } from './audit/audit.telemetry';
 import { ConfigModule } from "@nestjs/config";
 import { SchoolYearsModule } from "./school-years/school-years.module";
 import { GroupsModule } from "./groups/groups.module";
+import { TeachersModule } from "./teacher/teachers.module";
 
 @Module({
   imports: [
@@ -20,7 +21,8 @@ import { GroupsModule } from "./groups/groups.module";
     UsersModule, 
     AuditModule,
     SchoolYearsModule,
-    GroupsModule
+    GroupsModule,
+    TeachersModule
   ],
   controllers: [AppController],
   providers: [
