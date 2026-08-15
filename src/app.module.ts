@@ -12,6 +12,7 @@ import { ConfigModule } from "@nestjs/config";
 import { SchoolYearsModule } from "./school-years/school-years.module";
 import { GroupsModule } from "./groups/groups.module";
 import { TeachersModule } from "./teacher/teachers.module";
+import { ParentsModule } from "./parents/parents.module";
 
 @Module({
   imports: [
@@ -22,7 +23,8 @@ import { TeachersModule } from "./teacher/teachers.module";
     AuditModule,
     SchoolYearsModule,
     GroupsModule,
-    TeachersModule
+    TeachersModule,
+    ParentsModule
   ],
   controllers: [AppController],
   providers: [
