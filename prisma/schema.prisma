@@ -35,6 +35,12 @@ enum AttendanceStatus {
   RETARDO
 }
 
+enum TaskType {
+  TAREA
+  ACTIVIDAD
+  EXAMEN
+}
+
 model AuditLog {
   id                String @id @default(cuid())
   level             AuditLevel @default(INFO)
@@ -174,6 +180,7 @@ model Task {
   createdBy           User @relation(fields: [createdById], references: [id])
   createdById         String
   createdAt           DateTime @default(now())
+  type                TaskType @default(TAREA)
 
   submissions         Submission[]
 

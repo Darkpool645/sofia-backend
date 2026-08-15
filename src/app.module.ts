@@ -13,6 +13,9 @@ import { SchoolYearsModule } from "./school-years/school-years.module";
 import { GroupsModule } from "./groups/groups.module";
 import { TeachersModule } from "./teacher/teachers.module";
 import { ParentsModule } from "./parents/parents.module";
+import { TasksModule } from "./tasks/tasks.module";
+import { PortalModule } from "./portal/portal.module";
+import { AttendanceModule } from "./attendance/attendance.module";
 
 @Module({
   imports: [
@@ -24,7 +27,10 @@ import { ParentsModule } from "./parents/parents.module";
     SchoolYearsModule,
     GroupsModule,
     TeachersModule,
-    ParentsModule
+    ParentsModule,
+    TasksModule,
+    PortalModule,
+    AttendanceModule
   ],
   controllers: [AppController],
   providers: [
