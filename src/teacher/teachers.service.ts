@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from "src/prisma/prisma.service";
 import { AuditService } from "src/audit/audit.service";
 import { CreateTeacherDto } from './dto/create-teacher.dto';
+import { UpdateTeacherDto } from "./dto/update-teacher.dto";
 
 const teacherSelect = {
     id: true,
@@ -97,5 +98,111 @@ export class TeachersService {
             orderBy: { createdAt: 'desc' },
             select: teacherSelect
         });
+    }
+
+    findOne(id: string) {
+        return this.prisma.user.findFirst({
+            where: { id, role: 'PROFESOR' },
+            select: teacherSelect
+        });
+    }
+
+    async update(adminId: string, id:string, dto: UpdateTeacherDto){
+        const teacher = await this.prisma.user.findFirst({
+            where: { id, role: 'PROFESOR' },
+        });
+        if (!teacher) throw new NotFoundException('Docente no encontrado');
+
+        if (dto.email !== teacher.email) {
+            const taken = await this.prisma.user.findUnique({ where: { email: dto.email } });
+            if (taken) throw new ConflictException('El correo ya está registrado');
+        }
+
+        const assignments = dto.assignments ?? [];
+        if (assignments.length > 0) {
+            const groupIds = [...new Set(assignments.map((a) => a.groupId))];
+            const found = await this.prisma.group.findMany({
+                where: { id: { in: groupIds } },
+                select: { id: true },
+            });
+            if (found.length !== groupIds.length) {
+                throw new BadRequestException('Uno o más grupos no existen.');
+            }
+            for (const a of assignments) {
+                if (a.startTime >= a.endTime) {
+                    throw new BadRequestException(
+                        `En "${a.subject}", la hora de inicio debe ser menor a la de fin.`,
+                    );
+                }
+            }
+        }
+
+        let passwordHash: string | undefined;
+        if (dto.password) passwordHash = await bcrypt.hash(dto.password, 10);
+        
+        await this.prisma.$transaction(async (tx) => {
+            await tx.user.update({
+                where: { id },
+                data: {
+                    name: dto.name,
+                    email: dto.email,
+                    ...(passwordHash ? { passwordHash} : {}),
+                },
+            });
+
+            const existing = await tx.classSlot.findMany({
+                where: { teacherId: id },
+                select: { id : true },
+            });
+            const existingIds = new Set(existing.map((e) => e.id));
+            const incomingIds = new Set(
+                assignments.filter((a) => a.id).map((a) => a.id as string),
+            );
+
+            const toDelete = [...existingIds].filter((eid) => !incomingIds.has(eid));
+            if (toDelete.length > 0) {
+                await tx.classSlot.deleteMany({
+                    where: { id: { in: toDelete }, teacherId: id },
+                });
+            }
+
+            for (const a of assignments) {
+                if (a.id && existingIds.has(a.id)) {
+                    await tx.classSlot.update({
+                        where: { id: a.id },
+                        data: {
+                            groupId: a.groupId,
+                            subject: a.subject,
+                            dayOfWeek: a.dayOfWeek,
+                            startTime: a.startTime,
+                            endTime: a.endTime,
+                        }
+                    });
+                } else {
+                    await tx.classSlot.create({
+                        data: {
+                            teacherId: id,
+                            groupId: a.groupId,
+                            subject: a.subject,
+                            dayOfWeek:a.dayOfWeek,
+                            startTime: a.startTime,
+                            endTime: a.endTime
+                        },
+                    });
+                }
+            }
+        });
+
+        await this.audit.log({
+            level: 'INFO',
+            action: 'teacher.update',
+            actorId: adminId,
+            message: `Actualizó al docente ${dto.email}`,
+        });
+
+        return this.prisma.user.findFirst({
+            where: { id, role: 'PROFESOR' },
+            select: teacherSelect,
+        })
     }
 }
