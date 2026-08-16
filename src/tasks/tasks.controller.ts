@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { Roles, CurrentUser } from '../auth/decorators';
 import { SaveSubmissionsDto } from './dto/save-submissions.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Controller('tasks')
 export class TasksController {
@@ -34,5 +35,15 @@ export class TasksController {
     @Body() dto: SaveSubmissionsDto,
   ) {
     return this.service.saveSubmissions(user.id, id, dto);
+  }
+
+  @Roles('PROFESOR')
+  @Patch(':id')
+  update(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskDto,
+  ) {
+    return this.service.update(user.id, id, dto);
   }
 }
