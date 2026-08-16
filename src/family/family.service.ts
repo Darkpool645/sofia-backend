@@ -18,16 +18,15 @@ export class FamilyService {
     });
   }
 
-  // Muro: tareas/actividades/exámenes publicadas en el grupo del hijo.
+  // Muro: tareas del grupo del hijo + la entrega de ESE hijo (si existe).
   async feed(parentId: string, childId: string) {
-    // El hijo debe pertenecer a este padre.
     const child = await this.prisma.student.findFirst({
       where: { id: childId, guardianId: parentId },
       select: { id: true, groupId: true },
     });
     if (!child) throw new ForbiddenException('Ese alumno no es tu hijo.');
 
-    return this.prisma.task.findMany({
+    const tasks = await this.prisma.task.findMany({
       where: { groupId: child.groupId },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -39,7 +38,18 @@ export class FamilyService {
         createdAt: true,
         createdBy: { select: { name: true } },
         group: { select: { name: true } },
+        // Solo la entrega de este hijo (0 o 1 elemento).
+        submissions: {
+          where: { studentId: childId },
+          select: { delivered: true, grade: true },
+        },
       },
     });
+
+    // Aplana submissions[] a mySubmission (o null si no hay registro).
+    return tasks.map(({ submissions, ...rest }) => ({
+      ...rest,
+      mySubmission: submissions[0] ?? null,
+    }));
   }
 }
