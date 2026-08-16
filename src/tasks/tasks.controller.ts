@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { Roles, CurrentUser } from '../auth/decorators';
+import { SaveSubmissionsDto } from './dto/save-submissions.dto';
 
 @Controller('tasks')
 export class TasksController {
-  constructor(private service: TasksService) {}
+  constructor(private service: TasksService) { }
 
   @Roles('PROFESOR')
   @Post()
@@ -17,5 +18,21 @@ export class TasksController {
   @Get('mine')
   mine(@CurrentUser() user: any) {
     return this.service.findMine(user.id);
+  }
+
+  @Roles('PROFESOR')
+  @Get(':id/submissions')
+  getSubmissions(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.service.getSubmissions(user.id, id);
+  }
+
+  @Roles('PROFESOR')
+  @Post(':id/submissions')
+  saveSubmissions(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: SaveSubmissionsDto,
+  ) {
+    return this.service.saveSubmissions(user.id, id, dto);
   }
 }

@@ -193,6 +193,7 @@ model Submission {
   taskId              String
   student             Student @relation(fields: [studentId], references: [id])
   studentId           String
+  grade               Float?
   delivered           Boolean @default(false) // MVP: Entregó / No entregó
   updatedAt           DateTime @updatedAt
 

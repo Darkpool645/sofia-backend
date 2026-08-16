@@ -1,7 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { SaveSubmissionsDto } from './dto/save-submissions.dto';
 
 @Injectable()
 export class TasksService {
@@ -64,4 +65,77 @@ export class TasksService {
       },
     });
   }
+
+  async getSubmissions(teacherId: string, taskId: string) {
+  const task = await this.prisma.task.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true, title: true, type: true, groupId: true, createdById: true,
+      group: { select: { name: true } },
+    },
+  });
+  if (!task) throw new NotFoundException('Tarea no encontrada.');
+  if (task.createdById !== teacherId) {
+    throw new ForbiddenException('Esta tarea no es tuya.');
+  }
+
+  const students = await this.prisma.student.findMany({
+    where: { groupId: task.groupId },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+  const subs = await this.prisma.submission.findMany({
+    where: { taskId },
+    select: { studentId: true, delivered: true, grade: true },
+  });
+  const byStudent = new Map(subs.map((s) => [s.studentId, s]));
+
+  return {
+    taskId: task.id,
+    title: task.title,
+    type: task.type,
+    group: task.group.name,
+    students: students.map((s) => ({
+      id: s.id,
+      name: s.name,
+      delivered: byStudent.get(s.id)?.delivered ?? false,
+      grade: byStudent.get(s.id)?.grade ?? null,
+    })),
+  };
+}
+
+async saveSubmissions(teacherId: string, taskId: string, dto: SaveSubmissionsDto) {
+  const task = await this.prisma.task.findUnique({
+    where: { id: taskId },
+    select: { createdById: true },
+  });
+  if (!task) throw new NotFoundException('Tarea no encontrada.');
+  if (task.createdById !== teacherId) {
+    throw new ForbiddenException('Esta tarea no es tuya.');
+  }
+
+  await this.prisma.$transaction(
+    dto.records.map((r) =>
+      this.prisma.submission.upsert({
+        where: { taskId_studentId: { taskId, studentId: r.studentId } },
+        create: {
+          taskId,
+          studentId: r.studentId,
+          delivered: r.delivered,
+          grade: r.grade ?? null,
+        },
+        update: { delivered: r.delivered, grade: r.grade ?? null },
+      }),
+    ),
+  );
+
+  await this.audit.log({
+    level: 'INFO',
+    action: 'submission.save',
+    actorId: teacherId,
+    message: `Registró ${dto.records.length} entrega(s) de la tarea ${taskId}`,
+  });
+
+  return { ok: true, count: dto.records.length };
+}
 }
