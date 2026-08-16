@@ -16,6 +16,7 @@ import { ParentsModule } from "./parents/parents.module";
 import { TasksModule } from "./tasks/tasks.module";
 import { PortalModule } from "./portal/portal.module";
 import { AttendanceModule } from "./attendance/attendance.module";
+import { FamilyModule } from "./family/family.module";
 
 @Module({
   imports: [
@@ -30,7 +31,8 @@ import { AttendanceModule } from "./attendance/attendance.module";
     ParentsModule,
     TasksModule,
     PortalModule,
-    AttendanceModule
+    AttendanceModule,
+    FamilyModule,
   ],
   controllers: [AppController],
   providers: [
