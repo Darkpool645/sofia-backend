@@ -5,6 +5,11 @@ import { AuditService } from "src/audit/audit.service";
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from "./dto/update-teacher.dto";
 
+const DAYS: Record<number, string> = {
+    1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves',
+    5: 'viernes', 6: 'sábado', 7: 'domingo',
+};
+
 const teacherSelect = {
     id: true,
     name: true,
@@ -30,6 +35,27 @@ export class TeachersService {
         private audit: AuditService,
     ) { }
 
+    private assertNoClashes(
+        assignments: { dayOfWeek: number; startTime: string; endTime: string} [],
+    ) {
+        const byDay = new Map<number, { start: string, end: string }[]>();
+        for (const a of assignments) {
+            const list = byDay.get(a.dayOfWeek) ?? [];
+            list.push({ start: a.startTime, end: a.endTime });
+            byDay.set(a.dayOfWeek, list);
+        }
+        for (const [day, list] of byDay) {
+            list.sort((x, y) => x.start.localeCompare(y.start));
+            for (let i = 1; i < list.length; i++){
+                if (list[i].start < list[i - 1].end) {
+                    throw new BadRequestException(
+                        `Horarios traslapados el ${DAYS[day]}: ${list[i - 1].start}-${list[i-1].end} y ${list[i].start}-${list[i].end}.`
+                    );
+                }
+            }
+        }
+    }
+
     async create(creatorId: string, dto: CreateTeacherDto) {
         const exists = await this.prisma.user.findUnique({
             where: { email: dto.email },
@@ -53,6 +79,7 @@ export class TeachersService {
                 if (a.startTime >= a.endTime) {
                     throw new BadRequestException(`En "${a.subject}", la hora de inicio debe ser menor a la de fin.`);
                 }
+                this.assertNoClashes(assignments);
             }
         }
 
@@ -135,6 +162,7 @@ export class TeachersService {
                     );
                 }
             }
+            this.assertNoClashes(assignments);
         }
 
         let passwordHash: string | undefined;
