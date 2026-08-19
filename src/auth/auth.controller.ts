@@ -11,7 +11,7 @@ export class AuthController {
     @Post('login')
     @HttpCode(200)
     login(@Body() dto: LoginDto, @Req() req: any) {
-        return this.auth.login(dto.email, dto.password, req.ip);
+        return this.auth.login(dto.username, dto.password, req.ip);
     }
 
     @Get('me')

@@ -24,8 +24,9 @@ export class CreateParentDto {
   @MinLength(2)
   name!: string;
 
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @MinLength(3)
+  username!: string;
 
   @IsString()
   @MinLength(6)

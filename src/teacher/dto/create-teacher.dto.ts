@@ -27,8 +27,9 @@ export class CreateTeacherDto {
     @MinLength(1)
     name!: string;
 
-    @IsEmail()
-    email!: string;
+    @IsString()
+    @MinLength(3)
+    username!: string;
 
     @IsString()
     @MinLength(6)
