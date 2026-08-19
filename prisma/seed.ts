@@ -9,7 +9,6 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-// ── Utilidades ───────────────────────────────────────────────
 const rand = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = <T>(arr: T[]): T => arr[rand(0, arr.length - 1)];
@@ -26,7 +25,6 @@ const FIRST = [
   'Diego', 'Ana', 'Bruno', 'Elena', 'Iker', 'Lucía', 'Mateo', 'Sofía',
   'Emilia', 'Hugo', 'Valentina', 'Leo', 'Regina', 'Ángel', 'Camila',
   'Daniel', 'Renata', 'Emiliano', 'Ximena', 'Santiago', 'Fernanda',
-  'Pablo', 'Isabela', 'Adrián', 'Naomi',
 ];
 const LAST = [
   'Herrera', 'Ríos', 'Salas', 'Cruz', 'Montes', 'Vega', 'Ponce', 'Ruiz',
@@ -40,15 +38,17 @@ const SUBJECTS = [
   'Inglés', 'Educación Física', 'Arte',
 ];
 
-const COMMON_PASSWORD = '3mpanadA';
+const COMMON_PASSWORD = 'Sofia123!';
 
-// Fecha pasada más reciente para un día de la semana (1=lun..7=dom).
+// Matrícula tipo estudiante: año + consecutivo a 4 dígitos → 20260001
+const matricula = (i: number) => `2026${String(i).padStart(4, '0')}`;
+
 function lastPastDateForDow(isoDow: number): Date {
   const now = new Date();
   const d = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
-  d.setUTCDate(d.getUTCDate() - 1); // desde ayer hacia atrás
+  d.setUTCDate(d.getUTCDate() - 1);
   for (let i = 0; i < 7; i++) {
     const dow = d.getUTCDay();
     const iso = dow === 0 ? 7 : dow;
@@ -59,7 +59,6 @@ function lastPastDateForDow(isoDow: number): Date {
 }
 
 async function wipe() {
-  // Orden respetando llaves foráneas (hijos primero).
   await prisma.attendance.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.task.deleteMany();
@@ -80,44 +79,43 @@ async function main() {
 
   const commonHash = await bcrypt.hash(COMMON_PASSWORD, 10);
 
-  // ── SUPERADMIN (desde .env) ────────────────────────────────
-  const superEmail = process.env.SUPERADMIN_EMAIL ?? 'super@sofia.mx';
+  // SUPERADMIN
+  const superUser = process.env.SUPERADMIN_USERNAME ?? 'superadmin';
   const superPass = process.env.SUPERADMIN_PASSWORD ?? COMMON_PASSWORD;
   await prisma.user.create({
     data: {
-      email: superEmail,
+      username: superUser,
       name: 'Super Administrador',
       role: 'SUPERADMIN',
       passwordHash: await bcrypt.hash(superPass, 10),
     },
   });
 
-  // ── ADMIN ──────────────────────────────────────────────────
-  const admin = await prisma.user.create({
+  // ADMIN
+  await prisma.user.create({
     data: {
-      email: 'admin@sofia.mx',
+      username: 'admin',
       name: 'Ana Administradora',
       role: 'ADMIN',
       passwordHash: commonHash,
     },
   });
 
-  // ── DOCENTES (uno por materia) ─────────────────────────────
-  const teachers: { id: string; email: string; subject: string }[] = [];
+  // DOCENTES
+  const teachers: { id: string; subject: string }[] = [];
   for (let s = 0; s < SUBJECTS.length; s++) {
-    const email = `prof${s + 1}@sofia.mx`;
     const t = await prisma.user.create({
       data: {
-        email,
+        username: `prof${s + 1}`,
         name: `Profe ${SUBJECTS[s]}`,
         role: 'PROFESOR',
         passwordHash: commonHash,
       },
     });
-    teachers.push({ id: t.id, email, subject: SUBJECTS[s] });
+    teachers.push({ id: t.id, subject: SUBJECTS[s] });
   }
 
-  // ── CICLO ESCOLAR ──────────────────────────────────────────
+  // CICLO
   const cycle = await prisma.schoolYear.create({
     data: {
       name: '2026-2027',
@@ -127,9 +125,8 @@ async function main() {
     },
   });
 
-  // ── GRUPOS + ALUMNOS + CLASES ──────────────────────────────
+  // GRUPOS + ALUMNOS + CLASES
   const gradeNames = ['1°A', '1°B', '2°A', '2°B', '3°A', '3°B', '4°A', '4°B', '5°A', '5°B'];
-  // slots por grupo para usarlos luego (tareas, asistencia)
   const slotsByGroup: Record<
     string,
     { id: string; teacherId: string; subject: string; dayOfWeek: number }[]
@@ -140,7 +137,6 @@ async function main() {
       data: { name: gradeNames[g], schoolYearId: cycle.id },
     });
 
-    // Alumnos (15–20)
     const n = rand(15, 20);
     await prisma.student.createMany({
       data: Array.from({ length: n }, () => ({
@@ -149,16 +145,13 @@ async function main() {
       })),
     });
 
-    // 7 clases: una por día (1..7). Horario fijo del grupo, materia rotando.
-    // start = 9 + (g % 8) → sin choques de docente (demostrado).
     const startHour = 9 + (g % 8);
     const start = `${String(startHour).padStart(2, '0')}:00`;
     const end = `${String(startHour + 1).padStart(2, '0')}:00`;
 
     slotsByGroup[group.id] = [];
     for (let d = 1; d <= 7; d++) {
-      const subjIdx = (g + d) % 7;
-      const teacher = teachers[subjIdx];
+      const teacher = teachers[(g + d) % 7];
       const slot = await prisma.classSlot.create({
         data: {
           subject: teacher.subject,
@@ -179,21 +172,24 @@ async function main() {
     console.log(`  ✔ Grupo ${gradeNames[g]} · ${n} alumnos · 7 clases`);
   }
 
-  // ── PADRES ligados a alumnos ───────────────────────────────
+  // PADRES (username con formato de matrícula)
   const allStudents = shuffle(
     await prisma.student.findMany({ select: { id: true } }),
   );
   let idx = 0;
+  const parentMatriculas: string[] = [];
   for (let p = 0; p < 12; p++) {
+    const mat = matricula(p + 1);
+    parentMatriculas.push(mat);
     const parent = await prisma.user.create({
       data: {
-        email: `padre${p + 1}@sofia.mx`,
+        username: mat,
         name: `${pick(FIRST)} ${pick(LAST)}`,
         role: 'PADRE',
         passwordHash: commonHash,
       },
     });
-    const kids = p < 6 ? 2 : 1; // los primeros 6 con 2 hijos (para el selector)
+    const kids = p < 6 ? 2 : 1;
     for (let k = 0; k < kids && idx < allStudents.length; k++) {
       await prisma.student.update({
         where: { id: allStudents[idx].id },
@@ -203,7 +199,7 @@ async function main() {
     }
   }
 
-  // ── TAREAS + ENTREGAS + ASISTENCIA (para poblar vistas) ────
+  // TAREAS + ENTREGAS + ASISTENCIA
   const types = ['TAREA', 'ACTIVIDAD', 'EXAMEN'] as const;
   for (const groupId of Object.keys(slotsByGroup)) {
     const slots = slotsByGroup[groupId];
@@ -212,7 +208,6 @@ async function main() {
       select: { id: true },
     });
 
-    // 3 tareas de 3 docentes distintos del grupo
     const chosen = shuffle(slots).slice(0, 3);
     let firstTaskId: string | null = null;
     for (let i = 0; i < chosen.length; i++) {
@@ -222,7 +217,7 @@ async function main() {
       const task = await prisma.task.create({
         data: {
           title: `${pick(['Repaso', 'Ejercicios', 'Proyecto', 'Lectura', 'Práctica'])} de ${slot.subject}`,
-          description: 'Material de práctica para reforzar el tema visto en clase.',
+          description: 'Material de práctica para reforzar el tema.',
           type: types[i % types.length],
           dueDate: due,
           groupId,
@@ -232,7 +227,6 @@ async function main() {
       if (i === 0) firstTaskId = task.id;
     }
 
-    // Entregas con calificación para la primera tarea
     if (firstTaskId) {
       await prisma.submission.createMany({
         data: students.map((s) => {
@@ -247,7 +241,6 @@ async function main() {
       });
     }
 
-    // Asistencia de un día pasado (queda como historial inmutable)
     const slot = slots[0];
     const date = lastPastDateForDow(slot.dayOfWeek);
     await prisma.attendance.createMany({
@@ -261,14 +254,12 @@ async function main() {
     });
   }
 
-  // ── Resumen de credenciales ────────────────────────────────
-  console.log('\n✅ Datos de prueba creados.\n');
-  console.log('Credenciales (contraseña común salvo el superadmin):');
-  console.log(`  SUPERADMIN: ${superEmail}  /  (tu SUPERADMIN_PASSWORD)`);
-  console.log(`  ADMIN:      admin@sofia.mx  /  ${COMMON_PASSWORD}`);
-  console.log(`  DOCENTES:   prof1@sofia.mx … prof7@sofia.mx  /  ${COMMON_PASSWORD}`);
-  console.log(`  PADRES:     padre1@sofia.mx … padre12@sofia.mx  /  ${COMMON_PASSWORD}`);
-  console.log('\n  (padre1–padre6 tienen 2 hijos; padre7–padre12 tienen 1)');
+  console.log('\n✅ Datos creados. Credenciales (contraseña común salvo superadmin):');
+  console.log(`  SUPERADMIN: ${superUser}  /  (tu SUPERADMIN_PASSWORD)`);
+  console.log(`  ADMIN:      admin  /  ${COMMON_PASSWORD}`);
+  console.log(`  DOCENTES:   prof1 … prof7  /  ${COMMON_PASSWORD}`);
+  console.log(`  PADRES (matrícula):  ${parentMatriculas[0]} … ${parentMatriculas[parentMatriculas.length - 1]}  /  ${COMMON_PASSWORD}`);
+  console.log(`     ${parentMatriculas.join(', ')}`);
 }
 
 main()
